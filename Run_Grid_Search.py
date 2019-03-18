@@ -163,7 +163,7 @@ def run_model(directory, name, model_id, batch_size, steps):
         y=Y_train,
         batch_size=batch_size,
         num_epochs=None,
-        shuffle=True)
+        shuffle=False)
     
     DnCNN.train(input_fn=train, steps=steps)
 
@@ -365,4 +365,4 @@ def run_grid(grid_loc,  #Location of the grid to run
 # In[ ]:
 
 
-run_grid(str(sys.argv[1]), '/scratch2/ttoebro/Grid_search/Models/','/scratch2/ttoebro/data/X_test_pois_1_9.npy', '/scratch2/ttoebro/data/Y_test_pois_1_9.npy', '/scratch2/ttoebro/data/X_test_pois_1_9.npy', '/scratch2/ttoebro/data/Y_test_pois_1_9.npy',   'DnCNN',  10, 1 )
+run_grid(sys.argv[0], '/scratch2/ttoebro/Grid_search/Models/','/scratch2/ttoebro/data/X_train_rad41_subset.npy', '/scratch2/ttoebro/data/Y_train_rad41_subset.npy', '/scratch2/ttoebro/data/X_test_rad41_subset.npy', '/scratch2/ttoebro/data/X_test_rad41_subset.npy', 'DnCNN',  5000, 1 )
