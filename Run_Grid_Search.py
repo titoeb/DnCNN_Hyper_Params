@@ -189,8 +189,7 @@ def eval_model(directory, name, model_id, batch_size, steps):
     sum_mse = 0
     sum_ssim = 0
     
-    #for im_num in range(0, Y_test.shape[0]):
-    for im_num in range(0, 10):
+    for im_num in range(0, Y_test.shape[0]):
         prediction = next(predict_results)
         true_image = Y_test[im_num,:,:,:]
         sum_mae += np.mean(np.abs(prediction - true_image))
@@ -365,4 +364,4 @@ def run_grid(grid_loc,  #Location of the grid to run
 # In[ ]:
 
 
-run_grid(sys.argv[0], '/scratch2/ttoebro/Grid_search/Models/','/scratch2/ttoebro/data/X_train_rad41_subset.npy', '/scratch2/ttoebro/data/Y_train_rad41_subset.npy', '/scratch2/ttoebro/data/X_test_rad41_subset.npy', '/scratch2/ttoebro/data/X_test_rad41_subset.npy', 'DnCNN',  5000, 1 )
+run_grid(str(sys.argv[1]), '/scratch2/ttoebro/Grid_search/Models/','/scratch2/ttoebro/data/X_train_rad41_subset.npy', '/scratch2/ttoebro/data/Y_train_rad41_subset.npy', '/scratch2/ttoebro/data/X_test_rad41_subset.npy', '/scratch2/ttoebro/data/X_test_rad41_subset.npy', 'DnCNN',  5000, 1 )
