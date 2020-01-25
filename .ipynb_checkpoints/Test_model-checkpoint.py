@@ -11,15 +11,11 @@ from PIL import Image
 from SSIM_PIL import compare_ssim
 import sys
 
-
-# Define the model to be used.
-
-# Helper functions for the convolutional layers.
 def conv_layer(tensor_in, name_layer, is_training, f_num, f_size):
     x = tf.layers.conv2d(
         inputs = tensor_in,
         filters = f_num,
-        kernel_size = [filter_size_in, filter_size_in],
+        kernel_size = [f_size, f_size],
         padding = "same",
         activation= None,
         name = name_layer,
@@ -35,7 +31,7 @@ def conv_layer_without_relu(tensor_in, name_layer, is_training, f_num, f_size):
     x = tf.layers.conv2d(
         inputs = tensor_in,
         filters = f_num,
-        kernel_size = [filter_size_in, filter_size_in],
+        kernel_size = [f_size, f_size],
         padding = "same",
         activation= None,
         name = name_layer,
@@ -48,7 +44,6 @@ def conv_layer_without_relu(tensor_in, name_layer, is_training, f_num, f_size):
     
     return x
 
-# Definition of the main Neural Network
 def DnCNN_model(features, labels, mode):
    # Input Layer
     input_oiginal = features['x']
@@ -64,7 +59,6 @@ def DnCNN_model(features, labels, mode):
     is_training_mode = (mode == tf.estimator.ModeKeys.TRAIN)
     
     if (skipped_scheme_in == "ResNet"):
-        # Standard DnCNN skipped layers scheme: one residual link between first and last
         cur_tensor = input_layer
         for i in range(1, depth_in + 1):
             if i == 1:
@@ -72,7 +66,7 @@ def DnCNN_model(features, labels, mode):
                 save = cur_tensor
             elif (i - 1) % 2 == 0:
                 cur_tensor = conv_layer_without_relu(cur_tensor, "conv{}".format(i), is_training_mode, filter_num_in, filter_size_in)
-                cur_tensor += save
+                cur_tensor = tf.add(cur_tensor, save, name  = "conv{}".format(i) + "_add")
                 cur_tensor = tf.nn.relu(cur_tensor, name = "conv{}".format(i) + "_relu")
                 save = cur_tensor
             else:
@@ -91,7 +85,7 @@ def DnCNN_model(features, labels, mode):
         # Standard DnCNN skipped layers scheme: one residual link between first and last
         cur_tensor = input_layer
         for i in range(1, depth_in + 1):
-            cur = conv_layer(cur_tensor, "conv{}".format(i), is_training_mode, filter_num_in, filter_size_in)
+            cur_tensor = conv_layer(cur_tensor, "conv{}".format(i), is_training_mode, filter_num_in, filter_size_in)
 
         # Final layers: Make it a gray scale image again!
         final_layer = tf.layers.conv2d(
@@ -112,7 +106,7 @@ def DnCNN_model(features, labels, mode):
     elif(loss_scheme_in == 'L1'):
         loss = tf.losses.mean_squared_error(labels = labels , predictions = final_layer)
     else:
-        loss =  loss = tf.losses.absolute_difference(labels = labels , predictions = final_layer)
+        loss = tf.losses.absolute_difference(labels = labels , predictions = final_layer)
        
     ### Print summary ###
     if (mode != tf.estimator.ModeKeys.PREDICT):
@@ -144,8 +138,7 @@ def DnCNN_model(features, labels, mode):
             # The loss function should be minimized.
             train_op = optimizer.minimize(loss = loss, global_step=tf.train.get_global_step())
             return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
-
-# Run the main model.
+        
 def run_model(directory, name, model_id, batch_size, steps):
     runconf = tf.estimator.RunConfig(save_summary_steps=5, log_step_count_steps = 10, tf_random_seed= 1993)
     DnCNN = tf.estimator.Estimator(config=runconf,
@@ -160,6 +153,7 @@ def run_model(directory, name, model_id, batch_size, steps):
     
     DnCNN.train(input_fn=train, steps=steps)
 
+# Define the evaluation of the model.
 def eval_model(directory, name, model_id, batch_size, steps):
     # Specify Model
     runconf = tf.estimator.RunConfig(save_summary_steps=1000, log_step_count_steps = 1000, tf_random_seed= 1993)
@@ -178,7 +172,8 @@ def eval_model(directory, name, model_id, batch_size, steps):
     sum_mse = 0
     sum_ssim = 0
     
-    for im_num in range(0, Y_test.shape[0]):
+    #for im_num in range(0, Y_test.shape[0]):
+    for im_num in range(0, 10):
         prediction = next(predict_results)
         true_image = Y_test[im_num,:,:,:]
         sum_mae += np.mean(np.abs(prediction - true_image))
@@ -191,8 +186,6 @@ def eval_model(directory, name, model_id, batch_size, steps):
     mean_ssim = sum_ssim / X_train.shape[0]
     return([mean_mae, mean_mse, mean_ssim])
 
-
-# Execute a single iteration of the grid search.
 def Execute_model(depth,
                   filter_num,
                   loss_scheme,
@@ -268,69 +261,11 @@ def Execute_model(depth,
     # return MAE, MSE, SSIM on test and run-time
     return({'Avg_MAE': MAE, 'Avg_MSE': MSE, 'Avg_SSIM' : SSIM, 'Runtime_test' : Runtime_test, 'Runtime_train' : Runtime_train, "Error_message" : error_message})   
 
-# Run a whole grid from file.
-def run_grid(grid_loc,  #Location of the grid to run
-             directory, #Location of the models that should be run 
-             X_train_loc, # Location of the X training set
-             Y_train_loc, # Location of the Y training set
-             X_test_loc, # Location of the X test set
-             Y_test_loc, # Location of the Y test set
-                  name,  #Names of the models
-                  steps, # How many steps should each model be run
-                  batch_size # With what batch sizes should the model be runned
-                    ):
-    
-    # Load grid to run
-    data = pd.read_csv(grid_loc, dtype={'Error_message': str, 'location': str})
-    
-    # Load data for model
-    global X_train, Y_train, X_test, Y_test
-    X_train = np.load(X_train_loc)
-    Y_train = np.load(Y_train_loc)
-    X_test = np.load(X_test_loc)
-    Y_test = np.load(Y_test_loc)
-    
-    # Run each model specification in the rows if the 'location' columns is empty
-    for row in range(0, data.shape[0]):
-        if(data.loc[row, 'location'] == "not_run"):
-            e = ''
-            # Run Model specification
-            try:
-                res = Execute_model(data.loc[row, 'depth'],
-                      data.loc[row, 'filter_num'],
-                      data.loc[row, 'loss_scheme'],
-                      data.loc[row, 'skipped_scheme'],
-                      int(data.loc[row, 'filter_size']),
-                      data.loc[row, 'learning_rate'],
-                      directory,
-                      str(data.loc[row, 'model_id']),
-                      name,
-                      batch_size,
-                              steps)
-            except Exception as e:
-                print("Error in Execute model. " + str(e))
-                e = "Error in Execute model. " + str(e)
-                data.loc[row, 'Avg_MAE'] = -12.0
-                data.loc[row, 'Avg_MSE'] = -12.0
-                data.loc[row, 'Avg_SSIM'] = -12.0
-                data.loc[row, 'Runtime_test'] = -3.0
-                data.loc[row, 'Runtime_train'] = -3.0
-                data.loc[row, 'Error_message'] = e
-                data.loc[row, 'location'] = '-.-'
-                continue
-                
-            data.loc[row, 'Avg_MAE'] = res['Avg_MAE']
-            data.loc[row, 'Avg_MSE'] = res['Avg_MSE']
-            data.loc[row, 'Avg_SSIM'] = res['Avg_SSIM']
-            data.loc[row, 'Runtime_test'] = res['Runtime_test']
-            data.loc[row, 'Runtime_train'] = res['Runtime_train']
-            data.loc[row, 'Error_message'] = res['Error_message']
-            data.loc[row, 'location'] = directory + name + "_" + str(data.loc[row, 'model_id'])
-            # Save results from run to data
-          
-            # Save progress
-            data.to_csv(grid_loc, index=False)
-    del X_train,Y_train, X_test, Y_test
+# Load the training and test data.
+X_train = np.load("/scratch2/ttoebro/data/X_test_pois_1_9.npy")
+X_test = np.load("/scratch2/ttoebro/data/X_test_pois_1_9.npy")
+Y_train = np.load("/scratch2/ttoebro/data/Y_test_pois_1_9.npy")
+Y_test = np.load("/scratch2/ttoebro/data/Y_test_pois_1_9.npy")
 
-# Start the grid search. Take the file to be grid searched over from command line.
-run_grid(str(sys.argv[1]), '/scratch2/ttoebro/Grid_search/Models/','/scratch2/ttoebro/data/X_train_rad41_subset.npy', '/scratch2/ttoebro/data/Y_train_rad41_subset.npy', '/scratch2/ttoebro/data/X_test_rad41_subset.npy', '/scratch2/ttoebro/data/X_test_rad41_subset.npy', 'DnCNN',  5000, 1 )
+# Test the model.
+Execute_model(10, 16, 'L1', 'ResNet',  5,  0.1,  '/scratch2/ttoebro/models/test/', 'Resnet', 'this6', 3, 2000)
